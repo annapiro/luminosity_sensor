@@ -1,6 +1,10 @@
-/* TSL2591 Digital Light Sensor */
-/* Dynamic Range: 600M:1 */
-/* Maximum Lux: 88K */
+/*
+  Luminosity measurement
+
+  Adafruit TSL2591 Digital Light Sensor
+  Maximum Lux: 88K 
+
+*/
 
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
@@ -10,7 +14,7 @@
 Adafruit_TSL2591 tsl = Adafruit_TSL2591(2591); // pass in a number for the sensor identifier (for your use later)
 LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
 
-// display basic sensor info
+// From TSL2591 example sketches - display basic sensor info
 void displaySensorDetails(void) {
   sensor_t sensor;
   tsl.getSensor(&sensor);
@@ -26,7 +30,7 @@ void displaySensorDetails(void) {
   delay(500);
 }
 
-// configure gain and integration time
+// From TSL2591 example sketches - configure gain and integration time
 void configureSensor(void) {
   tsl.setGain(TSL2591_GAIN_LOW);    // 1x gain (bright light)
   // tsl.setGain(TSL2591_GAIN_MED);      // 25x gain
@@ -67,79 +71,13 @@ void configureSensor(void) {
   Serial.println(F(""));
 }
 
-float getLux(void) {
-  // Simple data read example. Just read the infrared, fullspecrtrum diode 
-  // or 'visible' (difference between the two) channels.
-  // This can take 100-600 milliseconds! Uncomment whichever of the following you want to read
-  // uint16_t x = tsl.getLuminosity(TSL2591_VISIBLE);
-  // uint16_t x = tsl.getLuminosity(TSL2591_FULLSPECTRUM);
-  // uint16_t x = tsl.getLuminosity(TSL2591_INFRARED);
-
-  // More advanced data read example. Read 32 bits with top 16 bits IR, bottom 16 bits full spectrum
-  uint32_t lum = tsl.getFullLuminosity();
-  uint16_t ir, full;
-  ir = lum >> 16;
-  full = lum & 0xFFFF;
-  float lux;
-  lux = tsl.calculateLux(full, ir);
+// print a summary of the readings to the serial monitor
+void printSummary(uint16_t ch0, uint16_t ch1) {
   Serial.print(F("[ ")); Serial.print(millis()); Serial.print(F(" ms ] "));
-  Serial.print(F("IR: ")); Serial.print(ir);  Serial.print(F("  "));
-  Serial.print(F("Full: ")); Serial.print(full); Serial.print(F("  "));
-  Serial.print(F("Visible: ")); Serial.print(full - ir); Serial.print(F("  "));
-  Serial.print(F("Lux: ")); Serial.println(tsl.calculateLux(full, ir), 6);
-
-  return lux;
-}
-
-uint16_t getChannel0(void) {
-  uint16_t full;
-  // simple read
-  full = tsl.getLuminosity(TSL2591_FULLSPECTRUM);
-
-  // advanced read
-  // uint32_t lum = tsl.getFullLuminosity();
-  // full = lum & 0xFFFF;
-  
-  // Serial.print(F("CH0 raw counts: ")); Serial.println(full);
-
-  return full;
-}
-
-uint16_t getChannel1(void) {
-  uint16_t ir;
-  // simple read
-  ir = tsl.getLuminosity(TSL2591_INFRARED);
-
-  // advanced read
-  // uint32_t lum = tsl.getFullLuminosity();
-  // ir = lum >> 16;
-
-  // Serial.print(F("CH1 raw counts: ")); Serial.println(ir);
-
-  return ir;
-}
-
-// read using the Adafruit Unified Sensor API
-void unifiedSensorAPIRead(void) {
-  /* Get a new sensor event */ 
-  sensors_event_t event;
-  tsl.getEvent(&event);
- 
-  /* Display the results (light is measured in lux) */
-  Serial.print(F("[ ")); Serial.print(event.timestamp); Serial.print(F(" ms ] "));
-  if ((event.light == 0) |
-      (event.light > 4294966000.0) | 
-      (event.light <-4294966000.0))
-  {
-    /* If event.light = 0 lux the sensor is probably saturated */
-    /* and no reliable data could be generated! */
-    /* if event.light is +/- 4294967040 there was a float over/underflow */
-    Serial.println(F("Invalid data (adjust gain or timing)"));
-  }
-  else
-  {
-    Serial.print(event.light); Serial.println(F(" lux"));
-  }
+  Serial.print(F("IR: ")); Serial.print(ch1);  Serial.print(F("  "));
+  Serial.print(F("Full: ")); Serial.print(ch0); Serial.print(F("  "));
+  Serial.print(F("Visible: ")); Serial.print(ch0 - ch1); Serial.print(F("  "));
+  Serial.print(F("Lux: ")); Serial.println(tsl.calculateLux(ch0, ch1), 6);
 }
 
 void updateDisplay(uint16_t ch0, uint16_t ch1, float lux) {
@@ -159,6 +97,8 @@ void updateDisplay(uint16_t ch0, uint16_t ch1, float lux) {
 
 void setup(void) {
   Serial.begin(9600); 
+
+  // initialize the sensor
   Serial.println(F("Starting Adafruit TSL2591 test..."));
   
   if (tsl.begin()) 
@@ -173,7 +113,8 @@ void setup(void) {
     
   displaySensorDetails();
   configureSensor();
-
+  
+  // initialize the display
   lcd.init();
   lcd.backlight();
   lcd.setCursor(0, 0);
@@ -185,9 +126,12 @@ void setup(void) {
 }
 
 void loop(void) { 
-  float lux = getLux(); 
-  uint16_t ch0 = getChannel0();
-  uint16_t ch1 = getChannel1();
+  uint16_t ch0 = tsl.getLuminosity(TSL2591_FULLSPECTRUM);
+  uint16_t ch1 = tsl.getLuminosity(TSL2591_INFRARED);
+  float lux = tsl.calculateLux(ch0, ch1);
+
   updateDisplay(ch0, ch1, lux);
+  printSummary(ch0, ch1);
+
   delay(500);
 }
