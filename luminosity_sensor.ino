@@ -14,6 +14,10 @@
 Adafruit_TSL2591 tsl = Adafruit_TSL2591(2591); // pass in a number for the sensor identifier (for your use later)
 LiquidCrystal_I2C lcd(0x27,16,2);  // set the LCD address to 0x27 for a 16 chars and 2 line display
 
+bool logging = false;  // flag to indicate logging state
+unsigned long logStartTime = 0;  // variable to track logging timme
+const long logDuration = 20000;  // logging duration in milliseconds
+
 // From TSL2591 example sketches - display basic sensor info
 void displaySensorDetails(void) {
   sensor_t sensor;
@@ -72,12 +76,12 @@ void configureSensor(void) {
 }
 
 // print a summary of the readings to the serial monitor
-void printSummary(uint16_t ch0, uint16_t ch1) {
+void printSummary(uint16_t full, uint16_t ir) {
   Serial.print(F("[ ")); Serial.print(millis()); Serial.print(F(" ms ] "));
-  Serial.print(F("IR: ")); Serial.print(ch1);  Serial.print(F("  "));
-  Serial.print(F("Full: ")); Serial.print(ch0); Serial.print(F("  "));
-  Serial.print(F("Visible: ")); Serial.print(ch0 - ch1); Serial.print(F("  "));
-  Serial.print(F("Lux: ")); Serial.println(tsl.calculateLux(ch0, ch1), 6);
+  Serial.print(F("IR: ")); Serial.print(ir);  Serial.print(F("  "));
+  Serial.print(F("Full: ")); Serial.print(full); Serial.print(F("  "));
+  Serial.print(F("Visible: ")); Serial.print(full - ir); Serial.print(F("  "));
+  Serial.print(F("Lux: ")); Serial.println(tsl.calculateLux(full, ir), 6);
 }
 
 void updateDisplay(uint16_t ch0, uint16_t ch1, float lux) {
@@ -131,7 +135,36 @@ void loop(void) {
   float lux = tsl.calculateLux(ch0, ch1);
 
   updateDisplay(ch0, ch1, lux);
-  printSummary(ch0, ch1);
+  // printSummary(ch0, ch1);
+
+  if (Serial.available()) {
+    String command = Serial.readStringUntil('\n');
+    if (command.equalsIgnoreCase("log")) {
+      logging = true;
+      logStartTime = millis();
+      Serial.println("Logging started...");
+      Serial.println("AM1.5G,Timestamp,CH0,CH1,Lux");
+    }
+  }
+
+  if (logging) {
+    // print data in CSV format
+    Serial.print(",");
+    Serial.print(millis()); // timestamp
+    Serial.print(",");
+    Serial.print(ch0); // channel 0 - full spectrum
+    Serial.print(",");
+    Serial.print(ch1); // channel 1 - IR
+    Serial.print(",");
+    Serial.println(lux); // lux
+
+    // stop logging after specified time
+    if (millis() - logStartTime >= logDuration) {
+      logging = false;
+      Serial.println("Logging stopped.");
+      Serial.println();
+    }
+  }
 
   delay(500);
 }
