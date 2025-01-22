@@ -18,6 +18,10 @@ bool logging = false;  // flag to indicate logging state
 unsigned long logStartTime = 0;  // variable to track logging timme
 const long logDuration = 20000;  // logging duration in milliseconds
 
+// fitted coefficients for converting raw counts to irradiance
+const float a = 0.032823239664847834;
+const float b = 1.039138018146907;
+
 // From TSL2591 example sketches - display basic sensor info
 void displaySensorDetails(void) {
   sensor_t sensor;
@@ -84,19 +88,41 @@ void printSummary(uint16_t full, uint16_t ir) {
   Serial.print(F("Lux: ")); Serial.println(tsl.calculateLux(full, ir), 6);
 }
 
-void updateDisplay(uint16_t ch0, uint16_t ch1, float lux) {
-  // clear the display
-  lcd.setCursor(2, 0);
-  lcd.print("     ");
-  lcd.setCursor(10, 0);
-  lcd.print("     ");
+// convert CH0 raw counts to irradiance (W/m2)
+float countsToIrradiance(uint16_t counts) {
+  return a * pow(counts, b);
+}
 
-  lcd.setCursor(2, 0);
-  lcd.print(ch0);
-  lcd.setCursor(10, 0);
-  lcd.print(ch1);
-  lcd.setCursor(6, 1);
-  lcd.print(lux);
+void updateDisplay(float irrad, float errorMargin) {
+  // clear the display
+  lcd.setCursor(5, 0);
+  lcd.print("           ");
+  lcd.setCursor(0, 1);
+  lcd.print("               ");
+  
+  // print new values
+  lcd.setCursor(6, 0);
+  lcd.print(irrad);
+
+  int padding;  
+  if (irrad >= 2500) {
+    padding = 1;
+  } else if (irrad >= 1000) {
+    padding = 2;
+  } else if (irrad >= 250) {
+    padding = 1;
+  } else if (irrad >= 100) {
+    padding = 2;
+  } else if (irrad >= 10) {
+    padding = 1;
+  } else {
+    padding = 0;
+  }
+
+  lcd.setCursor(3 + padding, 1);
+  lcd.print("+-");
+  lcd.setCursor(6 + padding, 1);
+  lcd.print(errorMargin);
 }
 
 void setup(void) {
@@ -122,19 +148,18 @@ void setup(void) {
   lcd.init();
   lcd.backlight();
   lcd.setCursor(0, 0);
-  lcd.print("0:");  // full
-  lcd.setCursor(8, 0);
-  lcd.print("1:");  // ir
-  lcd.setCursor(0, 1);
-  lcd.print("Lux:");  // 
+  lcd.print("W/m2:");
 }
 
 void loop(void) { 
   uint16_t ch0 = tsl.getLuminosity(TSL2591_FULLSPECTRUM);
   uint16_t ch1 = tsl.getLuminosity(TSL2591_INFRARED);
   float lux = tsl.calculateLux(ch0, ch1);
+  float irrad = countsToIrradiance(ch0);
+  // calculate possible error due to temperature
+  float error = countsToIrradiance(0.04 * ch0);
 
-  updateDisplay(ch0, ch1, lux);
+  updateDisplay(irrad, error);
   // printSummary(ch0, ch1);
 
   if (Serial.available()) {
@@ -143,20 +168,21 @@ void loop(void) {
       logging = true;
       logStartTime = millis();
       Serial.println("Logging started...");
-      Serial.println("AM1.5G,Timestamp,CH0,CH1,Lux");
+      Serial.println("Timestamp,CH0,CH1,Lux,Irradiance[W/m2]");
     }
   }
 
   if (logging) {
     // print data in CSV format
-    Serial.print(",");
     Serial.print(millis()); // timestamp
     Serial.print(",");
     Serial.print(ch0); // channel 0 - full spectrum
     Serial.print(",");
     Serial.print(ch1); // channel 1 - IR
     Serial.print(",");
-    Serial.println(lux); // lux
+    Serial.print(lux); // lux
+    Serial.print(",");
+    Serial.println(irrad); // irradiance
 
     // stop logging after specified time
     if (millis() - logStartTime >= logDuration) {
