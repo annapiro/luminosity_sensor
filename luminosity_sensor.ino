@@ -22,6 +22,9 @@ const long logDuration = 20000;  // logging duration in milliseconds
 const float a = 0.032823239664847834;
 const float b = 1.039138018146907;
 
+// error margin due to temperature, based on empirical observations
+float errorMargin = 0.04;
+
 // From TSL2591 example sketches - display basic sensor info
 void displaySensorDetails(void) {
   sensor_t sensor;
@@ -93,6 +96,15 @@ float countsToIrradiance(uint16_t counts) {
   return a * pow(counts, b);
 }
 
+float calculateError(uint16_t counts, float irrad) {
+  float countsError = counts * errorMargin;
+  float lowerBound = countsToIrradiance(counts - countsError);
+  float upperBound = countsToIrradiance(counts + countsError);
+  float diffDown = irrad - lowerBound;
+  float diffUp = upperBound - irrad;
+  return (diffDown > diffUp) ? diffDown : diffUp;
+}
+
 void updateDisplay(float irrad, float errorMargin) {
   // clear the display
   lcd.setCursor(5, 0);
@@ -157,7 +169,7 @@ void loop(void) {
   float lux = tsl.calculateLux(ch0, ch1);
   float irrad = countsToIrradiance(ch0);
   // calculate possible error due to temperature
-  float error = countsToIrradiance(0.04 * ch0);
+  float error = calculateError(ch0, irrad);
 
   updateDisplay(irrad, error);
   // printSummary(ch0, ch1);
