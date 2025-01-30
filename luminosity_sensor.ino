@@ -1,6 +1,5 @@
 /*
   Luminosity measurement
-
   Adafruit TSL2591 Digital Light Sensor
   Maximum Lux: 88K 
 
@@ -23,7 +22,7 @@ const float a = 0.032823239664847834;
 const float b = 1.039138018146907;
 
 // error margin due to temperature, based on empirical observations
-float errorMargin = 0.04;
+float errorMargin = 0.05;
 
 // From TSL2591 example sketches - display basic sensor info
 void displaySensorDetails(void) {
@@ -180,7 +179,7 @@ void loop(void) {
       logging = true;
       logStartTime = millis();
       Serial.println("Logging started...");
-      Serial.println("Timestamp,CH0,CH1,Lux,Irradiance[W/m2]");
+      Serial.println("Arduino time,CH0,CH1,Lux,Irradiance[W/m2],Error[W/m2]");
     }
   }
 
@@ -192,9 +191,11 @@ void loop(void) {
     Serial.print(",");
     Serial.print(ch1); // channel 1 - IR
     Serial.print(",");
-    Serial.print(lux); // lux
+    Serial.print(lux);
     Serial.print(",");
-    Serial.println(irrad); // irradiance
+    Serial.print(irrad);
+    Serial.print(",");
+    Serial.println(error);
 
     // stop logging after specified time
     if (millis() - logStartTime >= logDuration) {
